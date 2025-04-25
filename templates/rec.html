@@ -1,0 +1,132 @@
+
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Face Recognition</title>
+</head>
+<body>
+
+    <h2>Facial Recognition</h2>
+    <video id="videoFeed" width="640" height="480" autoplay></video>
+
+    <button id="startRecognition">Recognize Face</button>
+    <p id="outputBox">Recognition Status: Waiting...</p>
+    <div id="recognition-result">
+        <p id="face-name"></p>
+        <p id="face-hash"></p>
+    </div>
+
+    <script>
+        let videoStream = null; // To hold the camera stream
+        const videoElement = document.getElementById("videoFeed");
+        const startRecognitionButton = document.getElementById("startRecognition");
+        const outputBox = document.getElementById("outputBox");
+        const faceNameElement = document.getElementById("face-name");
+        const faceHashElement = document.getElementById("face-hash");
+
+        // Start the camera stream when the page loads
+        window.addEventListener('load', () => {
+            startCamera();
+        });
+
+        // Start camera stream
+        function startCamera() {
+            if (videoStream) {
+                // If the camera is already active, do nothing
+                return;
+            }
+            navigator.mediaDevices.getUserMedia({ video: true })
+                .then(stream => {
+                    videoStream = stream;
+                    videoElement.srcObject = stream; // Set the video stream to the image element
+                })
+                .catch(error => {
+                    console.error("Error accessing camera: ", error);
+                    outputBox.innerText = "Error accessing camera";
+                    outputBox.style.color = "red";
+                });
+        }
+
+        // Stop the camera when navigating away
+        window.addEventListener('beforeunload', () => {
+            stopCamera();
+        });
+
+        function stopCamera() {
+            if (videoStream) {
+                let tracks = videoStream.getTracks();
+                tracks.forEach(track => track.stop()); // Stop all video tracks
+                videoStream = null;
+            }
+        }
+
+        startRecognitionButton.addEventListener("click", function() {
+            let canvas = document.createElement("canvas");
+            let context = canvas.getContext("2d");
+
+            canvas.width = videoElement.width;
+            canvas.height = videoElement.height;
+            context.drawImage(videoElement, 0, 0, canvas.width, canvas.height);
+
+            let imageData = canvas.toDataURL("image/jpeg");
+
+            fetch("/start-recognition", {
+                method: "POST",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({ frame: imageData })
+            })
+            .then(response => response.json())
+            .then(data => {
+                console.log("Backend Response Data:", data);  // Add this line for debugging
+
+                let recognized = false;
+                let liveness = "Unknown"; // Default value
+                let name = "";
+                let hash = "";
+
+                // Check all faces in the data
+                data.faces.forEach(face => {
+                    console.log("Face Data:", face);  // Add this line for debugging
+
+                    // Check if face is recognized and liveness is REAL (handle liveness format with "REAL" prefix)
+                    if (face.name !== "Unknown" && face.liveness.startsWith("REAL")) {
+                        recognized = true;
+                        name = face.name;
+                        hash = face.hash;
+                    } else {
+                        console.log(`Face ${face.name} is not recognized or liveness is not REAL.`);
+                    }
+
+                    // Capture liveness result from each face
+                    liveness = face.liveness ? face.liveness : "Unknown"; 
+                });
+
+                console.log("Final Recognition:", recognized);  // Add this line for debugging
+                console.log("Liveness Status:", liveness);  // Add this line for debugging
+
+                // Update recognition status and liveness
+                outputBox.innerText = `Recognition Status: ${recognized ? "True" : "False"} | Liveness: ${liveness}`;
+                outputBox.style.color = recognized ? "green" : "red";
+
+                // Display the name and hash only when the face is recognized and liveness is real
+                if (recognized && liveness.startsWith("REAL")) {
+                    faceNameElement.innerText = `Name: ${name}`;
+                    faceHashElement.innerText = `Hash: ${hash}`;
+                } else {
+                    faceNameElement.innerText = "";
+                    faceHashElement.innerText = "";
+                }
+            })
+            .catch(error => {
+                console.error("Error recognizing face:", error);
+                outputBox.innerText = "Recognition failed";
+                outputBox.style.color = "red";
+            });
+        });
+
+    </script>
+
+</body>
+</html>

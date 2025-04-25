@@ -1,0 +1,109 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Capture Face</title>
+    <style>
+        /* Add some basic styling for the camera and buttons */
+        #camera {
+            width: 100%;
+            height: auto;
+            border: 1px solid #ccc;
+        }
+        .button-container {
+            margin-top: 20px;
+            text-align: center;
+        }
+        button {
+            background-color: #007BFF;
+            color: white;
+            border: none;
+            padding: 10px 20px;
+            margin: 10px;
+            border-radius: 5px;
+            cursor: pointer;
+        }
+        button:hover {
+            background-color: #0056b3;
+        }
+        #hashDisplay {
+            margin-top: 15px;
+            font-size: 18px;
+            font-weight: bold;
+            color: #333;
+            text-align: center;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>Capture Face</h1>
+        <video id="video" autoplay></video>
+        <input type="text" id="nameInput" placeholder="Enter Name" required>
+        <canvas id="canvas" style="display: none;"></canvas>
+        <!-- Display hash value here -->
+        <p id="hashDisplay"></p>
+        <div class="button-container">
+            <button id="capture">Capture</button>
+            <button id="goBack">Go Back</button>
+        </div>
+    </div>
+
+    <script>
+document.addEventListener("DOMContentLoaded", function () {
+    const video = document.getElementById("video");
+    const captureButton = document.getElementById("capture");
+    const goBackButton = document.getElementById("goBack");
+    const nameInput = document.getElementById("nameInput");
+    const canvas = document.getElementById("canvas");
+    const hashDisplay = document.getElementById("hashDisplay"); // Corrected this line
+    const context = canvas.getContext("2d");
+
+    // Access the webcam
+    navigator.mediaDevices.getUserMedia({ video: true })
+        .then(stream => {
+            video.srcObject = stream;
+        })
+        .catch(error => console.error("Error accessing webcam:", error));
+
+    // Capture image
+    captureButton.addEventListener("click", function () {
+        const name = nameInput.value.trim();
+        if (!name) {
+            alert("Please enter a name before capturing.");
+            return;
+        }
+
+        canvas.width = video.videoWidth;
+        canvas.height = video.videoHeight;
+        context.drawImage(video, 0, 0, canvas.width, canvas.height);
+
+        // Convert canvas to base64 image
+        const imageData = canvas.toDataURL("image/jpeg");
+
+        // Generate a random 16-character hash
+        const hashValue = Math.random().toString(36).substring(2, 18).toUpperCase();
+
+        // Display the hash on the screen
+        hashDisplay.textContent = "Generated Hash: " + hashValue;
+
+        // Send image data, name, and hash to the server
+        fetch("/save-face", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ image: imageData, name: name, hash: hashValue })
+        })
+        .then(response => response.json())
+        .then(data => alert(data.message))
+        .catch(error => console.error("Error saving face:", error));
+    });
+
+    // Go back to the main page
+    goBackButton.addEventListener("click", function () {
+        window.location.href = "/";
+    });
+});
+    </script>
+</body>
+</html>
